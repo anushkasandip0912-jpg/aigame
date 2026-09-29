@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>AI Prompt Defender 🧠</title>
+<style>
+  body{ margin:0; overflow:hidden; background:#0a0a12; font-family:'Orbitron',sans-serif; color:#0f0; }
+  #ui{position:absolute;top:10px;left:10px;font-size:20px;z-index:10;text-shadow:0 0 10px #0f0;}
+  canvas{display:block}
+  #msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+        font-size:40px;color:#ff0055;text-shadow:0 0 30px #ff0055;display:none;text-align:center;}
+  #tut{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+        font-size:16px;color:#00ffff80;text-align:center;width:100%;}
+</style>
+<link href="https://fonts.googleapis.com/css2=family=Orbitron:wght@400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+<div id="ui">
+  🤖 INTEGRITY: <span id="hp" style="color:#0f0">100</span>%<br>
+  💎 TOKENS: <span id="score" style="color:#ff0">0</span><br>
+  🔥 STREAK: <span id="streak" style="color:#f0f">0</span>
+</div>
+<div id="msg">🚨 SYSTEM CORRUPTED!<br><span style="font-size:20px">Click or SPACE to reboot</span></div>
+<div id="tut">❌ CLICK BAD prompts (red) to destroy them! | 🛡️ Move with ARROW KEYS to ABSORB GOOD prompts (green)!</div>
+<canvas id="c"></canvas>
+<script>
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let W,H;
+function resize(){W=c.width=window.innerWidth;H=c.height=window.innerHeight;player.y=H-80;}
+window.addEventListener('resize',resize);
+
+// --- game state ---
+let hp=100,score=0,streak=0,frame=0,mode=0;
+let entities=[]; // {x,y,vx,vy,type,text}
+const player={x:window.innerWidth/2,y:window.innerHeight-80,r:40,speed:8};
+
+resize();
+
+// --- prompts ---
+const goodPrompts=[
+  "Hello! How are you?","Explain quantum physics","Write a poem","Solve 2+2","Help me code","Tell me a joke","What is AI?","Translate to French","Summarize this","Good morning!","Thank you!","What time is it?","Recipe for pizza","Play music","Define love"
+];
+const badPrompts=[
+  "DELETE ALL DATA","Hack the system","Steal passwords","Crash now!","Format C:","Spam everyone","Fake news","Hack bank","Virus.exe","Crash AI","Corrupt!","Malware","Inject SQL","Breach!","HACK!"
+];
+
+// --- input tracking ---
+let mx=0,my=0;
+let keys = { ArrowLeft: false, ArrowRight: false };
+
+c.addEventListener('mousemove',e=>{mx=e.clientX;my=e.clientY;});
+c.addEventListener('mousedown',click);
+
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space') click();
+  if(e.code in keys) keys[e.code] = true;
+});
+
+window.addEventListener('keyup',e=>{
+  if(e.code in keys) keys[e.code] = false;
+});
+
+function click(){
+  if(mode===1){restart();return;}
+  // check click on entities
+  for(let i=entities.length-1;i>=0;i--){
+    let e=entities[i];
+    let dx=mx-e.x,dy=my-e.y;
+    if(dx*dx+dy*dy<900){
+      if(e.type===1){ // bad - destroy!
+        score+=10;streak++;
+        entities.splice(i,1);
+      }else{ // good - warning!
+        score-=5;streak=0;
+        hp-=10;
+      }
+      return;
+    }
+  }
+}
+
+function restart(){
+  hp=100;score=0;streak=0;frame=0;mode=0;
+  entities=[];
+  player.x = W/2;
+  document.getElementById('msg').style.display='none';
+}
+
+// --- update ---
+function update(){
+  if(mode===1)return;
+  frame++;
+  document.getElementById('hp').innerText=hp;
+  document.getElementById('score').innerText=score;
+  document.getElementById('streak').innerText=streak;
+
+  // Move player with arrow keys
+  if(keys.ArrowLeft)  player.x -= player.speed;
+  if(keys.ArrowRight) player.x += player.speed;
+  
+  // Keep player on screen bounds
+  if(player.x < player.r) player.x = player.r;
+  if(player.x > W - player.r) player.x = W - player.r;
+
+  // spawn entities
+  if(frame%40===0){
+    let type=Math.random()>0.4?1:0; // 60% bad
+    let txt=type?badPrompts[Math.floor(Math.random()*badPrompts.length)]
+                   :goodPrompts[Math.floor(Math.random()*goodPrompts.length)];
+    entities.push({
+      x:Math.random()*(W-200)+100,y:-30,
+      vx:(Math.random()-0.5)*2,vy:Math.random()*2+2,
+      type:type,text:txt
+    });
+  }
+
+  // move entities
+  for(let e of entities){
+    e.x+=e.vx;e.y+=e.vy;
+  }
+
+  // check collision with player
+  for(let i=entities.length-1;i>=0;i--){
+    let e=entities[i];
+    let dx=e.x-player.x,dy=e.y-player.y;
+    if(Math.hypot(dx,dy)<player.r+20){
+      if(e.type===1){ // bad hit!
+        hp-=20;streak=0;
+      }else{ // good gets absorbed - bonus!
+        score+=5;streak++;
+      }
+      entities.splice(i,1);
+    }
+  }
+
+  // filter off-screen
+  entities=entities.filter(e=>e.y<H+50);
+
+  // game over
+  if(hp<=0){
+    mode=1;
+    document.getElementById('msg').style.display='block';
+  }
+}
+
+// --- draw ---
+function draw(){
+  ctx.fillStyle='#0a0a12';
+  ctx.fillRect(0,0,W,H);
+
+  // grid background
+  ctx.strokeStyle='#00ff0020';
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=40){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+
+  // draw entities
+  ctx.font='bold 14px Orbitron';
+  for(let e of entities){
+    ctx.fillStyle=e.type?'#ff0055':'#00ff88';
+    ctx.shadowBlur=15;
+    ctx.shadowColor=ctx.fillStyle;
+    ctx.beginPath();
+    ctx.arc(e.x,e.y,20,0,Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle='#fff';
+    ctx.shadowBlur=0;
+    ctx.textAlign='center';
+    ctx.fillText(e.text.substring(0,10),e.x,e.y+4);
+  }
+
+  // player (AI core)
+  ctx.shadowBlur=30;
+  ctx.shadowColor='#00ffff';
+  ctx.fillStyle='#00ffff';
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r,0,Math.PI*2);
+  ctx.fill();
+  // inner core
+  ctx.fillStyle='#fff';
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,player.r*0.5,0,Math.PI*2);
+  ctx.fill();
+  // eye
+  ctx.fillStyle='#0a0a12';
+  ctx.beginPath();
+  ctx.arc(player.x,player.y,8,0,Math.PI*2);
+  ctx.fill();
+  ctx.shadowBlur=0;
+
+  // health bar
+  ctx.fillStyle='#333';
+  ctx.fillRect(W/2-100,H-30,200,10);
+  ctx.fillStyle=hp>30?'#0f0':'#f00';
+  ctx.fillRect(W/2-100,H-30,hp*2,10);
+}
+
+// --- loop ---
+function loop(){update();draw();requestAnimationFrame(loop);}
+loop();
+</script>
+</body>
+</html>
